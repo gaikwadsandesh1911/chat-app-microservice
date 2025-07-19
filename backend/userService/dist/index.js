@@ -18,9 +18,6 @@ app.use(express.json({
 // limit: '100kb'
 }));
 app.use("/api/v1/user", userRoutes);
-app.get("/", (req, res, next) => {
-    res.send("hello world");
-});
 // default route. if no route matches
 app.use((req, res, next) => {
     return next(new CustomError(`Can't find ${req.originalUrl} on this server`, 400));
@@ -34,7 +31,7 @@ const startServer = async () => {
         await connectRedis();
         await connectRabbitMQ();
         server = app.listen(port, () => {
-            console.log(`🚀 Application is running on http://localhost:${port}`);
+            console.log(`🚀 User service is running on http://localhost:${port}`);
         });
     }
     catch (error) {
@@ -43,6 +40,7 @@ const startServer = async () => {
     }
 };
 startServer();
+// -----------------------------------------------------------------------------------------
 process.on('SIGINT', async () => {
     await closeRabbitMQ();
     process.exit(0);

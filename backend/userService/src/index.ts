@@ -12,7 +12,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import userRoutes from './routes/userRoutes.js';
-import { closeRabbitMQ, connectRabbitMQ } from "./config/rabbitmqConnection.js";
+
+import {closeRabbitMQ, connectRabbitMQ} from "./config/rabbitmqConnection.js";
 
 const app = express();
 
@@ -23,10 +24,6 @@ app.use(express.json({
 }));
 
 app.use("/api/v1/user", userRoutes);
-
-app.get("/", (req, res, next)=>{
-  res.send("hello world");
-});
 
 // default route. if no route matches
 app.use((req, res, next)=>{
@@ -49,7 +46,7 @@ const startServer = async () => {
     await connectRabbitMQ();
 
     server = app.listen(port, () => {
-      console.log(`🚀 Application is running on http://localhost:${port}`);
+      console.log(`🚀 User service is running on http://localhost:${port}`);
     });
 
   } catch (error) {
@@ -57,7 +54,10 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
 startServer();
+
+// -----------------------------------------------------------------------------------------
 
 process.on('SIGINT', async () => {
   await closeRabbitMQ();
