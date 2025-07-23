@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 dotenv.config();
-export const sendOtpMail = async ({ to, subject, html }) => {
+export const sendOtpToMail = async ({ to, subject, html }) => {
     try {
         const transporter = nodemailer.createTransport({
             host: 'smtp.gmail.com',
@@ -12,17 +12,18 @@ export const sendOtpMail = async ({ to, subject, html }) => {
                 pass: process.env.MAIL_PASSWORD,
             },
         });
-        const info = await transporter.sendMail({
+        const mailResponse = await transporter.sendMail({
             from: 'chat-app <no-reply@chatapp.com>',
             to,
             subject,
             html
         });
-        console.log(`📧 OTP mail sent to ${to} (Message ID: ${info.messageId})`);
+        console.log(`✔ OTP sent to ${to}`, mailResponse);
+        return true;
     }
     catch (error) {
-        console.error(`❌ Failed to send OTP mail to ${to}:`, error);
+        console.error(`❌ Failed to send OTP to ${to}:`, error);
         // You can also rethrow or handle retry here if needed
-        throw error;
+        return false;
     }
 };

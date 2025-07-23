@@ -2,9 +2,9 @@ import dotenv from "dotenv";
 dotenv.config();
 import express from "express";
 import { globalErrorHandler } from "./utils/globalErrorHandler.js";
-import { connectDB } from "./config/dbConnections.js";
+import { connectDB, closeDB } from "./config/dbConnections.js";
 import { CustomError } from "./utils/CustomError.js";
-import { connectRedis } from "./config/redisConnection.js";
+import { closeRedis, connectRedis } from "./config/redisConnection.js";
 import path from 'path';
 import { fileURLToPath } from 'url';
 // Re-create __dirname in ESM
@@ -35,13 +35,60 @@ const startServer = async () => {
         });
     }
     catch (error) {
-        console.log("❌ Server startup failed:", error);
+        console.log("❌ User Server failed to start:", error);
         process.exit(1);
     }
 };
 startServer();
 // -----------------------------------------------------------------------------------------
-process.on('SIGINT', async () => {
-    await closeRabbitMQ();
-    process.exit(0);
+// gracefully shut down
+const gracefullyShutDown = async (signal) => {
+    console.log(`🛑 ${signal} received. Gracefully shutting down..`);
+    try {
+        // close server first
+        if (server) {
+            /*  server.close() is callback-based, not Promise-based.
+                It won’t wait for the server to finish closing. The function will move to the next line
+                Wrapping with new Promise makes it awaitable:
+            */
+            await new Promise((resolve, reject) => {
+                server.close((err) => {
+                    if (err)
+                        return reject(err);
+                    resolve();
+                });
+            });
+        }
+        console.log('🛑 Express server closed.');
+        //  and then close all other services
+        await closeDB();
+        await closeRedis();
+        await closeRabbitMQ();
+        console.log('✅ All services shut down cleanly.');
+        process.exit(0);
+    }
+    catch (err) {
+        console.error('❌ Error during shutdown:', err);
+        process.exit(1);
+    }
+};
+// SIGINT stands for Signal Interrupt.  when you press Ctrl + C in the terminal.
+process.on("SIGINT", () => gracefullyShutDown("SIGINT"));
+// SIGTERM stands for Signal Terminate. typically comes from (os, docker, aws, kubernates)
+process.on('SIGTERM', () => gracefullyShutDown('SIGTERM'));
+// process.exit(0); =>  immediately terminate the process, 0 == success, 1 == error
+/*  process.exit() immediately stops the event loop
+    Any async code after it will be ignored
+    Always make sure to await cleanup tasks before calling it
+*/
+// when a Promise is rejected and there’s no .catch() handler or tryCatch
+/* process.on('unhandledRejection', (err) => {
+  console.log('unhandledRejection error => ', err)
+  gracefullyShutDown('UNHANDLED-REJECTION');
 });
+
+// uncaughtException handles synchronous errors not caught by try/catch
+process.on('uncaughtException', (err) => {
+  console.log('uncaughtException error => ', err)
+  gracefullyShutDown('UNCAUGHT-Exception');
+}); */

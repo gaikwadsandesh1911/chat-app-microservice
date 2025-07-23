@@ -1,21 +1,10 @@
 import dotenv from 'dotenv';
 dotenv.config();
 import amqplib from 'amqplib';
-import { CustomError } from '../utils/CustomError.js';
 let connection = null; // must be only one connection per service
-let publisherChannel = null; // more than one channel can be create, here we need only one
-const EXCHANGE_NAME = 'otp_exchange';
-const QUEUE_NAME = 'otp_queue';
-const ROUTING_KEY = 'send-otp';
-const DLQ_NAME = `${QUEUE_NAME}_dlq`;
-const DLQ_ROUTING_KEY = `${ROUTING_KEY}_dlq`;
-// -----------------------------------------------------------------------------------------------------------------
 export const connectRabbitMQ = async () => {
-    // Prevent double connection
-    if (connection && publisherChannel) {
-        console.log("🐇 Already connected to RabbitMQ.");
-        return;
-    }
+    if (connection)
+        return connection;
     try {
         const connectionOptions = {
             protocol: process.env.RABBITMQ_PROTOCOL || 'amqp',
@@ -27,73 +16,18 @@ export const connectRabbitMQ = async () => {
         };
         // make connection with rabbitMQ, It a TCP connection between your application and the RabbitMQ (the messagebroker.)
         connection = await amqplib.connect(connectionOptions);
-        // creating channel to send and recieve messages
-        publisherChannel = await connection.createChannel();
-        // Optional default queue creation, so there will be atleast one queue will be available
-        await publisherChannel.assertQueue('default-queue', { durable: true });
-        await publisherChannel.assertExchange(EXCHANGE_NAME, 'direct', { durable: true });
-        await publisherChannel.assertQueue(QUEUE_NAME, {
-            durable: true,
-            deadLetterExchange: EXCHANGE_NAME,
-            deadLetterRoutingKey: DLQ_ROUTING_KEY,
-        });
-        await publisherChannel.assertQueue(DLQ_NAME, { durable: true });
-        await publisherChannel.bindQueue(QUEUE_NAME, EXCHANGE_NAME, ROUTING_KEY);
-        await publisherChannel.bindQueue(DLQ_NAME, EXCHANGE_NAME, DLQ_ROUTING_KEY);
-        console.log('✅ RabbitMQ connected successfully to user service.');
+        console.log('✅ RabbitMQ connected successfully to User Service.');
+        return connection;
     }
     catch (error) {
-        console.error('❌ Failed to connect to RabbitMQ:', error);
+        console.error('❌ User Service Failed to connect to RabbitMQ:', error);
         throw error; // when we call this function this error will be handled in there catch blcok
-    }
-};
-// ----------------------------------------------------------------------------------------------------
-export const sendOtpToQueue = async (otpPayload, options) => {
-    const maxRetries = options.retries ?? 3;
-    const delayMs = options.delayMs ?? 500;
-    try {
-        if (!publisherChannel) {
-            throw new CustomError("RabbitMQ publisher channel is not initialized", 500);
-            /*  send otp function is called inside login controller which is wrapped with asyncErrorHandler
-                asyncErrorHandler catch the exception and passed to next() middleware
-                and finally handled in globalErrrorHandler
-            */
-        }
-        /* Converts the message (object or value) into a string and then to a Buffer.
-           because RabbitMQ messages are always in Buffer format, not plain objects or strings.
-        */
-        const messageBuffer = Buffer.from(JSON.stringify(otpPayload));
-        //  retries logic
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            const isPublished = publisherChannel.sendToQueue(QUEUE_NAME, messageBuffer, {
-                persistent: true
-            });
-            if (isPublished) {
-                console.log(`📤 Message sent to queue "${QUEUE_NAME}":`, otpPayload);
-                return true;
-            }
-            else {
-                console.log(` Attempt ${attempt} - Failed to publish to "${QUEUE_NAME}".`);
-                await new Promise((res) => setTimeout(res, delayMs)); // wait for 500ms to make attemp++  
-            }
-        }
-        console.warn(`❌ Max retries exceeded. OTP not delivered.`);
-        return false;
-    }
-    catch (error) {
-        console.error('❌ Failed to publish message to queue:', error);
-        throw new CustomError("An unexpected error occurred while sending OTP", 500);
-        // Network errors, serialization failures, RabbitMQ internal errors, etc. // fallback
     }
 };
 // ----------------------------------------------------------------------------------------------------
 // gracefully close RabbitMQ
 export const closeRabbitMQ = async () => {
     try {
-        if (publisherChannel) {
-            await publisherChannel.close();
-            publisherChannel = null;
-        }
         if (connection) {
             await connection.close();
             connection = null;
@@ -123,4 +57,26 @@ export const closeRabbitMQ = async () => {
 
     Connection = a big road connecting your app to RabbitMQ (TCP connection).
     Channel = a dedicated lane on that road for sending/receiving messages.
-*/ 
+*/
+/*  data is sent to exchange first instead of Queue directly.
+    because exchange decides where data should go based on routing key.
+    and..exchange and queue are connected througn binding_key.
+
+    why we send data to exchange ? because
+    One message can go to multiple queues, no queue, or the perticular queue based on rules(or based on routing logic or exchange type).
+
+    Different Routing Logics (Exchange Types):
+    1. Direct Exchange: Routes based on exact match of routing key.
+    2. Fanout Exchange: Broadcasts to all queues.
+    3. Topic Exchange: Pattern matching (wildcards).
+    4. Headers Exchange: Routes based on headers instead of routing key.
+
+    Retry mechanisms, Dead Letter Queues (DLQ), Priority Queues, etc., depend on exchange-based routing.
+
+    RabbitMQ uses Exchange as a powerful routing layer to handle message delivery logic.
+*/
+/*
+  🧠 RabbitMQ consume is asynchronous and event-driven, but your controller expects a response in a request-response style.
+      So you cannot directly await listenToMailStatus() because it doesn't return a value immediately — it’s a long-lived listener.
+      so we have to create custom respone, like we will return new Promise(()=>)
+*/

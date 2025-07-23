@@ -9,3 +9,14 @@ export const connectDB = async() => {
         throw error  // let index.ts handle it when call this method
     }
 };
+
+export const closeDB = async () => {
+  try {
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.connection.close();
+      console.log("🛑 MongoDB connection closed.");
+    }
+  } catch (err) {
+    console.error("❌ Failed to close MongoDB connection:", err);
+  }
+};
