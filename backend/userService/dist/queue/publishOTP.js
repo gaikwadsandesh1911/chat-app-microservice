@@ -43,7 +43,7 @@ export const publishOTP = async (otpPayload) => {
             });
             // channel.publish() returns true or false
             if (isPublished) {
-                console.log(`📤 Message sent to queue "${OTP_EXCHANGE}":`, otpPayload);
+                console.log(`📤 Message sent to "${OTP_EXCHANGE}":`, otpPayload);
                 return true; // exit the loop and function early
             }
             else {
@@ -70,8 +70,8 @@ export const publishOTP = async (otpPayload) => {
 /*
     Backpressure occurs when the producer (sender) is sending data faster than the consumer (receiver) or system can process or handle.
     Where You Encounter Backpressure:
-    Streams in Node.js	Writable stream’s internal buffer fills up
-    RabbitMQ (amqplib)	Channel's internal TCP buffer is full
-    HTTP APIs	Too many requests, the server responds slowly
-    File writes	Disk I/O slower than write rate
+      1. Streams in Node.js	Writable stream’s internal buffer fills up
+      2. RabbitMQ (amqplib)	Channel's internal TCP buffer is full
+      3  HTTP APIs	Too many requests, the server responds slowly
+      4.  File writes	Disk I/O slower than write rate
 */

@@ -1,6 +1,12 @@
 import express from 'express';
-import { getOtpStatusByOtpTrackingId, loginUser } from '../controllers/userController.js';
+import { getAllUsers, getOtpStatusByOtpTrackingId, getUser, loginUser, myProfile, updateName, verifyUser } from '../controllers/userController.js';
+import { isAuth } from '../middleware/isAuth.js';
 const router = express.Router();
 router.post('/login', loginUser);
+router.post('/verify-otp', verifyUser);
+router.get('/profile', isAuth, myProfile);
+router.post('/update-name', isAuth, updateName);
+router.get("/all", isAuth, getAllUsers);
+router.get("/:id", getUser);
 router.get('/otp-status/:otpTrackingId', getOtpStatusByOtpTrackingId);
 export default router;

@@ -1,49 +1,39 @@
-import dotenv from "dotenv";
-dotenv.config();
-import cors from 'cors';
-import express from "express";
-import { globalErrorHandler } from "./utils/globalErrorHandler.js";
-import { connectDB, closeDB } from "./config/dbConnections.js";
-import { CustomError } from "./utils/CustomError.js";
-import { closeRedis, connectRedis } from "./config/redisConnection.js";
-import path from 'path';
-import { fileURLToPath } from 'url';
-// Re-create __dirname in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-import userRoutes from './routes/userRoutes.js';
-import { closeRabbitMQ, connectRabbitMQ } from "./config/rabbitmqConnection.js";
-const app = express();
-app.use(cors());
-app.use(express.static(path.join(__dirname, '..', 'public')));
-app.use(express.json({
-// limit: '100kb'
-}));
-app.use("/api/v1/user", userRoutes);
-// default route. if no route matches
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
+const express_1 = __importDefault(require("express"));
+const dbConnection_js_1 = require("./config/dbConnection.js");
+const globalErrorHandler_js_1 = require("./utils/globalErrorHandler.js");
+const CustomError_js_1 = require("./utils/CustomError.js");
+const chatRoutes_js_1 = __importDefault(require("./routes/chatRoutes.js"));
+const app = (0, express_1.default)();
+app.use(express_1.default.json());
+app.use("/api/v1/chat", chatRoutes_js_1.default);
+// default route if no route finds
 app.use((req, res, next) => {
-    return next(new CustomError(`Can't find ${req.originalUrl} on this server`, 400));
+    return next(new CustomError_js_1.CustomError(`Can't find ${req.originalUrl} on this server`, 400));
 });
-app.use(globalErrorHandler);
-const port = process.env.PORT || 5001;
+// global error handling middleware
+app.use(globalErrorHandler_js_1.globalErrorHandler);
+const port = process.env.PORT || 5003;
 let server;
 const startServer = async () => {
     try {
-        await connectDB();
-        await connectRedis();
-        await connectRabbitMQ();
+        await (0, dbConnection_js_1.connectDB)();
         server = app.listen(port, () => {
-            console.log(`🚀 User service is running on http://localhost:${port}`);
+            console.log(`🚀 Chat service is running on http://localhost:${port}`);
         });
     }
     catch (error) {
-        console.log("❌ User Server failed to start:", error);
+        console.log(error);
         process.exit(1);
     }
 };
 startServer();
-// -----------------------------------------------------------------------------------------
-// gracefully shut down
 const gracefullyShutDown = async (signal) => {
     console.log(`🛑 ${signal} received. Gracefully shutting down..`);
     try {
@@ -63,9 +53,7 @@ const gracefullyShutDown = async (signal) => {
         }
         console.log('🛑 Express server closed.');
         //  and then close all other services
-        await closeDB();
-        await closeRabbitMQ();
-        await closeRedis();
+        await (0, dbConnection_js_1.closeDB)();
         console.log('✅ All services shut down cleanly.');
         process.exit(0);
     }
@@ -78,11 +66,6 @@ const gracefullyShutDown = async (signal) => {
 process.on("SIGINT", () => gracefullyShutDown("SIGINT"));
 // SIGTERM stands for Signal Terminate. typically comes from (os, docker, aws, kubernates)
 process.on('SIGTERM', () => gracefullyShutDown('SIGTERM'));
-// process.exit(0); =>  immediately terminate the process, 0 == success, 1 == error
-/*  process.exit() immediately stops the event loop
-    Any async code after it will be ignored
-    Always make sure to await cleanup tasks before calling it
-*/
 // when a Promise is rejected and there’s no .catch() handler or tryCatch
 process.on('unhandledRejection', (err) => {
     console.log('unhandledRejection error => ', err);
